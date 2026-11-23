@@ -1259,27 +1259,32 @@ read_text(const char *dir, const char *name)
 	return text;
 }
 
-//! Factory lens data (pvr/OpticalCalibrationData.json) and the stock chromatic aberration terms.
+//! Factory lens data (pvr/OpticalCalibrationData.json), PICO OS's table of lens batches and the stock chromatic aberration terms.
 static void
 load_lens(struct pico4_hmd *h)
 {
 	const char *dir = debug_get_option_pico4_calibration();
 	char *optical = read_text(dir, "pvr/OpticalCalibrationData.json");
+	char *table = read_text(dir, "pxrconfig/rule/SDK_Lens_Distortion_MatchConfigFile.txt");
 	char *config = read_text(dir, "pxrconfig/SDK_Lens_ConfigFile.txt");
 
-	h->has_lens = optical != NULL && pico4_lens_parse_optical(optical, h->lens);
-	if (!h->has_lens && config != NULL && pico4_lens_parse_sdk(config, h->lens)) {
-		/*
-		 * Factory files exist that name the lens centre offsets but no polynomial: the
-		 * first headset outside the project's own (August 2022) carries none, and PICO OS
-		 * runs the stock lens table's generic profile for it. The factory's own offsets
-		 * still apply; only the polynomial comes from the stock table.
-		 */
-		h->has_lens = true;
-		if (optical != NULL) {
-			(void)pico4_lens_parse_centers(optical, h->lens);
+	// Each eye's profile as PICO OS picks it (pico4_lens_load).
+	struct pico4_lens_loaded loaded;
+	h->has_lens = pico4_lens_load(optical, table, config, h->lens, &loaded);
+	for (int e = 0; e < 2; e++) {
+		const char *serial = loaded.serial[e];
+		if (loaded.source[e] == PICO4_LENS_BATCH) {
+			P4_INFO(h, "Eye %d: no distortion_parameter in the factory file: the profile of lens %s's batch", e,
+			        serial);
+		} else if (loaded.source[e] == PICO4_LENS_GENERIC && serial[0] != '\0') {
+			P4_INFO(h, "Eye %d: no distortion_parameter in the factory file and no profile for lens %s in "
+			           "the table of lens batches: the stock lens configuration's generic profile",
+			        e, serial);
+		} else if (loaded.source[e] == PICO4_LENS_GENERIC) {
+			P4_INFO(h, "Eye %d: no distortion_parameter and no lens in the factory file: the stock lens "
+			           "configuration's generic profile",
+			        e);
 		}
-		P4_INFO(h, "No distortion_parameter in the factory file: the stock lens table's generic profile");
 	}
 	h->ca = (struct pico4_lens_ca){{0}};
 	if (!h->has_lens) {
@@ -1291,6 +1296,7 @@ load_lens(struct pico4_hmd *h)
 		P4_INFO(h, "No chromatic aberration terms in %s, correcting geometry only", dir);
 	}
 	free(optical);
+	free(table);
 	free(config);
 }
 

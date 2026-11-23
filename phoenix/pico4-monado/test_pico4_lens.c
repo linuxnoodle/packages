@@ -14,6 +14,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/file.h>
 #include <unistd.h>
 
@@ -50,13 +51,53 @@ static const char *config =
     "{\"keyName\": \"sdk_lens_chromaticAberration5\", \"keyValue\": \"0\"},"
     "{\"keyName\": \"sdk_lens_distortionCoefficients1\", \"keyValue\": \"9\"}]}";
 
-// The factory file of a unit that names its lens centre offsets but no polynomial
-// (the first headset outside the project's own, August 2022).
+// A factory file that names its eyes' lenses (each eye a batch of its own) and its lens centre offsets, but
+// no polynomial: such files exist, and PICO OS runs each lens's batch's profile for them.
 static const char *optical_without_polynomial =
-    "{\"lens_center_gos\": {\"centerx\": {\"left\": \"0.5\", \"right\": \"0\"},"
+    "{\"lens_data\": {"
+    "\"left\": {\"lens_model\": \"0B\", \"lens_hole\": \"3\", \"lens_date\": \"20220815\"},"
+    "\"right\": {\"lens_model\": \"0T\", \"lens_hole\": \"4\", \"lens_date\": \"20220815\"}},"
+    "\"lens_center_gos\": {\"centerx\": {\"left\": \"0.5\", \"right\": \"0\"},"
     " \"centery\": {\"left\": \"0\", \"right\": \"-0.25\"}}}";
 
-// Same structure as the stock lens table: one generic profile, numbers as strings.
+// The same with the left eye's polynomial only.
+static const char *optical_left_polynomial =
+    "{\"distortion_parameter\": {"
+    "\"left\": {\"F\": \"0.025\", \"A0\": \"1\", \"A1\": \"0.5\", \"A2\": \"0\", \"A3\": \"0\", \"A4\": \"0\","
+    " \"A5\": \"0\", \"A6\": \"0\", \"A7\": \"0\", \"A8\": \"0\", \"A9\": \"0\", \"A10\": \"0\"}},"
+    "\"lens_data\": {"
+    "\"left\": {\"lens_model\": \"0B\", \"lens_hole\": \"3\", \"lens_date\": \"20220815\"},"
+    "\"right\": {\"lens_model\": \"0T\", \"lens_hole\": \"4\", \"lens_date\": \"20220815\"}},"
+    "\"lens_center_gos\": {\"centerx\": {\"left\": \"0.5\", \"right\": \"0\"},"
+    " \"centery\": {\"left\": \"0\", \"right\": \"-0.25\"}}}";
+
+// Same structure as the table of lens batches: per entry a lens serial number or "default" and the profile
+// "F,A0,...,A10" it links to. Not in sorted order, as the stock file is not; two entries are no lens batch's
+// profile, one with another linkage and one with another key.
+#define PROFILE(f, a0, a1) f "," a0 "," a1 ",0,0,0,0,0,0,0,0,0"
+#define BATCH(sn, profile)                                                                                                 \
+	"{\"_description\": \"Lens And Distortion Match Inf\", \"key\": \"lens_sn\", \"value\": \"" sn "\", \
+     \"linkageKey\": \"sdk_distortion_para\", \"linkageValue\": \"" profile "\", \"rule\": 1, \"status\": 1},"
+static const char *match_table =
+    "{\"versionCode\": 3, \"status\": 1, "
+    "\"path\": \"/system/etc/pxrconfig/rule/SDK_Lens_Distortion_MatchConfigFile.txt\", \"ruleData\": ["
+    BATCH("default", PROFILE("0.027", "1", "0.4"))
+    BATCH("m0B_h3_d20220901", PROFILE("0.027", "1", "0.6"))
+    BATCH("m0T_h4_d20220815", PROFILE("0.026", "1", "0.45"))
+    BATCH("m0B_h1_d20220701", PROFILE("0.027", "1", "0.41"))
+    BATCH("m0B_h3_d20220701", PROFILE("0.027", "1", "0.42"))
+    BATCH("m0B_h3_d20220801", PROFILE("0.0265", "1.0000005", "0.5"))
+    "{\"key\": \"lens_sn\", \"value\": \"m0B_h3_d20220810\", \"linkageKey\": \"sdk_display_panel\", "
+    "\"linkageValue\": \"" PROFILE("0.09", "9", "9") "\", \"rule\": 1, \"status\": 1},"
+    "{\"key\": \"panel_sn\", \"value\": \"m0B_h3_d20220812\", \"linkageKey\": \"sdk_distortion_para\", "
+    "\"linkageValue\": \"" PROFILE("0.08", "8", "8") "\", \"rule\": 1, \"status\": 1},"
+    "{\"_description\": \"Lens And Distortion Match Inf\", \"key\": \"lens_sn\", \"value\": \"m0B_h3_d20221001\", "
+    "\"linkageKey\": \"sdk_distortion_para\", \"linkageValue\": \"" PROFILE("0.027", "1", "0.7") "\", \"rule\": 1, "
+    "\"status\": 1}]}";
+#undef BATCH
+#undef PROFILE
+
+// Same structure as the stock lens configuration: one generic profile, numbers as strings.
 #define SDK_COEFFICIENT(i, v) "{\"keyName\": \"sdk_lens_distortionCoefficients" #i "\", \"keyValue\": \"" v "\"},"
 static const char *sdk_table =
     "{\"versionCode\": 5, \"configData\": ["
@@ -97,20 +138,111 @@ main(void)
 	EXPECT(NEAR(ca.ca[0], 0.01) && NEAR(ca.ca[2], -0.02));
 	EXPECT(!pico4_lens_parse_ca("{\"configData\": []}", &ca) && pico4_lens_parse_ca(config, &ca));
 
-	// A factory file without a polynomial is not the whole lens: its offsets still parse.
+	// A factory file without a polynomial: its lenses' serial numbers and its offsets still parse, per eye.
+	char serial[PICO4_LENS_SERIAL_MAX] = "kept";
 	EXPECT(!pico4_lens_parse_optical(optical_without_polynomial, lens));
+	EXPECT(pico4_lens_parse_serial(optical_without_polynomial, 0, serial) &&
+	       strcmp(serial, "m0B_h3_d20220815") == 0);
+	EXPECT(pico4_lens_parse_serial(optical_without_polynomial, 1, serial) &&
+	       strcmp(serial, "m0T_h4_d20220815") == 0);
 	EXPECT(pico4_lens_parse_centers(optical_without_polynomial, lens));
 	EXPECT(NEAR(lens[0].cx, -0.0005) && NEAR(lens[1].cy, 0.00025));
 	EXPECT(!pico4_lens_parse_centers("{\"single_screen_centor\": {}}", lens));
+	// The parts are strings in the stock file; plain numbers read the same. No lens for the eye, or no
+	// such eye, is none, and tells of no serial number.
+	EXPECT(pico4_lens_parse_serial(
+	           "{\"lens_data\": {\"left\": {\"lens_model\": \"0B\", \"lens_hole\": 3, \"lens_date\": 20220815}}}", 0,
+	           serial) &&
+	       strcmp(serial, "m0B_h3_d20220815") == 0);
+	EXPECT(!pico4_lens_parse_serial(optical, 0, serial) && serial[0] == '\0');
+	EXPECT(!pico4_lens_parse_serial(optical_without_polynomial, 2, serial) && serial[0] == '\0');
 
-	// The stock lens table's generic profile: one lens for both eyes, no offsets of its own,
-	// another equation type refused, and the offsets it runs with kept as they were.
-	EXPECT(pico4_lens_parse_sdk(sdk_table, lens));
-	EXPECT(NEAR(lens[0].f, 0.027) && NEAR(lens[1].f, 0.027) && NEAR(lens[0].k[1], 0.5) && NEAR(lens[1].k[1], 0.5));
+	// Each eye's polynomial on its own; an incomplete one is none and leaves the lens as it was.
+	EXPECT(pico4_lens_parse_factory(optical, 0, &lens[0]) && NEAR(lens[0].f, 0.025) && NEAR(lens[0].k[1], 0.5));
+	EXPECT(pico4_lens_parse_factory(optical, 1, &lens[1]) && NEAR(lens[1].k[0], 1) && NEAR(lens[1].k[1], 0));
+	EXPECT(!pico4_lens_parse_factory(optical_without_polynomial, 0, &lens[0]) && NEAR(lens[0].f, 0.025));
+	EXPECT(!pico4_lens_parse_factory("{\"distortion_parameter\": {\"left\": {\"F\": \"0.02\"}}}", 0, &lens[0]) &&
+	       NEAR(lens[0].f, 0.025));
+	EXPECT(!pico4_lens_parse_factory(optical, 2, &lens[0]) && NEAR(lens[0].f, 0.025));
+
+	// PICO OS's pick from the table of lens batches: the newest batch of the lens's mould and cavity
+	// dated on or before the lens, its F and coefficients together; its own batch is at or below;
+	// another cavity, a newer batch and the entries of another linkage and of another key play no part.
+	EXPECT(pico4_lens_parse_match_table(match_table, "m0B_h3_d20220815", &lens[0]));
+	EXPECT(NEAR(lens[0].f, 0.0265) && NEAR(lens[0].k[0], 1.0000005) && NEAR(lens[0].k[1], 0.5));
+	EXPECT(NEAR(lens[0].cx, -0.0005));
+	EXPECT(pico4_lens_parse_match_table(match_table, "m0T_h4_d20220815", &lens[0]) && NEAR(lens[0].f, 0.026) &&
+	       NEAR(lens[0].k[1], 0.45));
+	EXPECT(pico4_lens_parse_match_table(match_table, "m0B_h1_d20220815", &lens[0]) && NEAR(lens[0].f, 0.027) &&
+	       NEAR(lens[0].k[1], 0.41));
+	// A mould or cavity the table does not list, and a lens older than every batch of its own: "default".
+	EXPECT(pico4_lens_parse_match_table(match_table, "m0Z_h1_d20220815", &lens[0]) && NEAR(lens[0].f, 0.027) &&
+	       NEAR(lens[0].k[1], 0.4));
+	EXPECT(pico4_lens_parse_match_table(match_table, "m0B_h3_d20220601", &lens[0]) && NEAR(lens[0].f, 0.027) &&
+	       NEAR(lens[0].k[1], 0.4));
+	// An entry whose values are not F and eleven coefficients (here eleven, then thirteen) is no profile,
+	// and leaves the lens as it was; so is a serial number without a mould and cavity.
+	EXPECT(!pico4_lens_parse_match_table(
+	           "{\"ruleData\": [{\"key\": \"lens_sn\", \"value\": \"default\", \"linkageKey\": \"sdk_distortion_para\", "
+	           "\"linkageValue\": \"0.027,1,0.4,0,0,0,0,0,0,0\"}]}",
+	           "m0B_h3_d20220815", &lens[0]) &&
+	       NEAR(lens[0].f, 0.027));
+	EXPECT(!pico4_lens_parse_match_table(
+	           "{\"ruleData\": [{\"key\": \"lens_sn\", \"value\": \"default\", \"linkageKey\": \"sdk_distortion_para\", "
+	           "\"linkageValue\": \"0.027,1,0.4,0,0,0,0,0,0,0,0,0,0\"}]}",
+	           "m0B_h3_d20220815", &lens[0]) &&
+	       NEAR(lens[0].f, 0.027));
+	EXPECT(!pico4_lens_parse_match_table("{\"ruleData\": []}", "m0B_h3_d20220815", &lens[0]));
+	EXPECT(!pico4_lens_parse_match_table(match_table, "m0B_h3", &lens[0]));
+	EXPECT(!pico4_lens_parse_match_table(match_table, "m0B", &lens[0]));
+
+	// The stock lens configuration's generic profile: no offsets of its own, another equation type
+	// refused, and the lens centre kept as it was.
+	EXPECT(pico4_lens_parse_sdk_table(sdk_table, &lens[0]) && NEAR(lens[0].f, 0.027) && NEAR(lens[0].k[1], 0.5));
+	EXPECT(NEAR(lens[0].cx, -0.0005));
+	EXPECT(!pico4_lens_parse_sdk_table(sdk_other_eqn, &lens[0]) && NEAR(lens[0].f, 0.027));
+	EXPECT(!pico4_lens_parse_sdk_table(config, &lens[0]) && NEAR(lens[0].f, 0.027));
+
+	// Per eye, as PICO OS picks: the factory file's polynomial; else the lens's batch, whose serial
+	// number is told; else the generic profile: without a table, without one for the lens, without
+	// a factory file at all. The factory file's offsets go on both eyes' profiles.
+	struct pico4_lens_loaded loaded;
+	EXPECT(pico4_lens_load(optical, match_table, sdk_table, lens, &loaded));
+	EXPECT(loaded.source[0] == PICO4_LENS_FACTORY && loaded.source[1] == PICO4_LENS_FACTORY);
+	EXPECT(NEAR(lens[0].f, 0.025) && NEAR(lens[1].f, 0.025) && loaded.serial[0][0] == '\0' &&
+	       loaded.serial[1][0] == '\0');
 	EXPECT(NEAR(lens[0].cx, -0.0005) && NEAR(lens[1].cy, 0.00025));
-	EXPECT(!pico4_lens_parse_sdk(sdk_other_eqn, lens) && pico4_lens_parse_sdk(sdk_table, lens));
-	EXPECT(!pico4_lens_parse_sdk(config, lens) && pico4_lens_parse_sdk(sdk_table, lens));
-	EXPECT(NEAR(lens[0].f, 0.027) && NEAR(lens[0].k[1], 0.5));
+	EXPECT(pico4_lens_load(optical_without_polynomial, match_table, sdk_table, lens, &loaded));
+	EXPECT(loaded.source[0] == PICO4_LENS_BATCH && loaded.source[1] == PICO4_LENS_BATCH);
+	EXPECT(NEAR(lens[0].f, 0.0265) && NEAR(lens[0].k[0], 1.0000005) && NEAR(lens[1].f, 0.026) &&
+	       NEAR(lens[1].k[1], 0.45));
+	EXPECT(strcmp(loaded.serial[0], "m0B_h3_d20220815") == 0 && strcmp(loaded.serial[1], "m0T_h4_d20220815") == 0);
+	EXPECT(NEAR(lens[0].cx, -0.0005) && NEAR(lens[1].cy, 0.00025));
+	// One eye's polynomial and not the other's: each eye on its own.
+	EXPECT(pico4_lens_load(optical_left_polynomial, match_table, sdk_table, lens, &loaded));
+	EXPECT(loaded.source[0] == PICO4_LENS_FACTORY && NEAR(lens[0].f, 0.025) && NEAR(lens[0].k[1], 0.5));
+	EXPECT(loaded.source[1] == PICO4_LENS_BATCH && NEAR(lens[1].f, 0.026));
+	// Without a table of lens batches, or without one for the lens: the generic profile, the lens's
+	// serial number still told. Without a factory file: the generic profile and no serial number.
+	EXPECT(pico4_lens_load(optical_without_polynomial, NULL, sdk_table, lens, &loaded));
+	EXPECT(loaded.source[0] == PICO4_LENS_GENERIC && NEAR(lens[0].f, 0.027) && NEAR(lens[0].k[1], 0.5));
+	EXPECT(strcmp(loaded.serial[0], "m0B_h3_d20220815") == 0);
+	EXPECT(pico4_lens_load(optical_without_polynomial, "{\"ruleData\": []}", sdk_table, lens, &loaded));
+	EXPECT(loaded.source[1] == PICO4_LENS_GENERIC && NEAR(lens[1].f, 0.027));
+	EXPECT(pico4_lens_load(NULL, match_table, sdk_table, lens, &loaded));
+	EXPECT(loaded.source[1] == PICO4_LENS_GENERIC && loaded.serial[1][0] == '\0');
+	// Nothing at all: no model, none told of. One eye without a profile: no model for the headset, so
+	// no offsets on the other eye's either.
+	EXPECT(!pico4_lens_load(NULL, NULL, NULL, lens, &loaded));
+	EXPECT(loaded.source[0] == PICO4_LENS_NONE && loaded.source[1] == PICO4_LENS_NONE);
+	EXPECT(NEAR(lens[0].f, 0) && NEAR(lens[1].f, 0));
+	EXPECT(!pico4_lens_load(optical_left_polynomial, NULL, NULL, lens, &loaded));
+	EXPECT(loaded.source[0] == PICO4_LENS_FACTORY && loaded.source[1] == PICO4_LENS_NONE);
+	EXPECT(NEAR(lens[0].f, 0.025) && lens[0].cx == 0 && lens[0].cy == 0 && NEAR(lens[1].f, 0));
+	// A factory file with both polynomials reads as pico4_lens_parse_optical reads it, the only source before.
+	struct pico4_lens before[2];
+	EXPECT(pico4_lens_load(optical, NULL, NULL, lens, &loaded) && pico4_lens_parse_optical(optical, before));
+	EXPECT(memcmp(lens, before, sizeof(lens)) == 0);
 
 	// The rest of the file reads the factory fixture's lens again.
 	EXPECT(pico4_lens_parse_optical(optical, lens));
