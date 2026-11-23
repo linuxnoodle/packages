@@ -50,6 +50,37 @@ static const char *config =
     "{\"keyName\": \"sdk_lens_chromaticAberration5\", \"keyValue\": \"0\"},"
     "{\"keyName\": \"sdk_lens_distortionCoefficients1\", \"keyValue\": \"9\"}]}";
 
+// The factory file of a unit that names its lens centre offsets but no polynomial
+// (the first headset outside the project's own, August 2022).
+static const char *optical_without_polynomial =
+    "{\"lens_center_gos\": {\"centerx\": {\"left\": \"0.5\", \"right\": \"0\"},"
+    " \"centery\": {\"left\": \"0\", \"right\": \"-0.25\"}}}";
+
+// Same structure as the stock lens table: one generic profile, numbers as strings.
+#define SDK_COEFFICIENT(i, v) "{\"keyName\": \"sdk_lens_distortionCoefficients" #i "\", \"keyValue\": \"" v "\"},"
+static const char *sdk_table =
+    "{\"versionCode\": 5, \"configData\": ["
+    "{\"keyName\": \"sdk_lens_metersPerTanAngleAtCenter\", \"keyValue\": \"0.027\"},"
+    "{\"keyName\": \"sdk_lens_distortionEqnType\", \"keyValue\": \"2\"},"
+    SDK_COEFFICIENT(0, "1")
+    SDK_COEFFICIENT(1, "0.5")
+    SDK_COEFFICIENT(2, "0") SDK_COEFFICIENT(3, "0") SDK_COEFFICIENT(4, "0")
+    SDK_COEFFICIENT(5, "0") SDK_COEFFICIENT(6, "0") SDK_COEFFICIENT(7, "0")
+    SDK_COEFFICIENT(8, "0") SDK_COEFFICIENT(9, "0") SDK_COEFFICIENT(10, "0")
+    "{\"keyName\": \"sdk_lens_chromaticAberration0\", \"keyValue\": \"0\"}]}";
+
+// Equation type 3 would not be the power series in r² the model reads.
+static const char *sdk_other_eqn =
+    "{\"configData\": ["
+    "{\"keyName\": \"sdk_lens_metersPerTanAngleAtCenter\", \"keyValue\": \"0.027\"},"
+    "{\"keyName\": \"sdk_lens_distortionEqnType\", \"keyValue\": \"3\"},"
+    SDK_COEFFICIENT(0, "1") SDK_COEFFICIENT(1, "0") SDK_COEFFICIENT(2, "0")
+    SDK_COEFFICIENT(3, "0") SDK_COEFFICIENT(4, "0") SDK_COEFFICIENT(5, "0")
+    SDK_COEFFICIENT(6, "0") SDK_COEFFICIENT(7, "0") SDK_COEFFICIENT(8, "0")
+    SDK_COEFFICIENT(9, "0") SDK_COEFFICIENT(10, "0")
+    "{\"keyName\": \"sdk_lens_distortionMode\", \"keyValue\": \"1\"}]}";
+#undef SDK_COEFFICIENT
+
 int
 main(void)
 {
@@ -65,6 +96,24 @@ main(void)
 	EXPECT(pico4_lens_parse_ca(config, &ca));
 	EXPECT(NEAR(ca.ca[0], 0.01) && NEAR(ca.ca[2], -0.02));
 	EXPECT(!pico4_lens_parse_ca("{\"configData\": []}", &ca) && pico4_lens_parse_ca(config, &ca));
+
+	// A factory file without a polynomial is not the whole lens: its offsets still parse.
+	EXPECT(!pico4_lens_parse_optical(optical_without_polynomial, lens));
+	EXPECT(pico4_lens_parse_centers(optical_without_polynomial, lens));
+	EXPECT(NEAR(lens[0].cx, -0.0005) && NEAR(lens[1].cy, 0.00025));
+	EXPECT(!pico4_lens_parse_centers("{\"single_screen_centor\": {}}", lens));
+
+	// The stock lens table's generic profile: one lens for both eyes, no offsets of its own,
+	// another equation type refused, and the offsets it runs with kept as they were.
+	EXPECT(pico4_lens_parse_sdk(sdk_table, lens));
+	EXPECT(NEAR(lens[0].f, 0.027) && NEAR(lens[1].f, 0.027) && NEAR(lens[0].k[1], 0.5) && NEAR(lens[1].k[1], 0.5));
+	EXPECT(NEAR(lens[0].cx, -0.0005) && NEAR(lens[1].cy, 0.00025));
+	EXPECT(!pico4_lens_parse_sdk(sdk_other_eqn, lens) && pico4_lens_parse_sdk(sdk_table, lens));
+	EXPECT(!pico4_lens_parse_sdk(config, lens) && pico4_lens_parse_sdk(sdk_table, lens));
+	EXPECT(NEAR(lens[0].f, 0.027) && NEAR(lens[0].k[1], 0.5));
+
+	// The rest of the file reads the factory fixture's lens again.
+	EXPECT(pico4_lens_parse_optical(optical, lens));
 
 	// s(rsq) = 1 + 0.5 rsq.
 	EXPECT(NEAR(pico4_lens_scale(&lens[0], 2), 2));

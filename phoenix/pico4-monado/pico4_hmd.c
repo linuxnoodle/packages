@@ -1268,6 +1268,19 @@ load_lens(struct pico4_hmd *h)
 	char *config = read_text(dir, "pxrconfig/SDK_Lens_ConfigFile.txt");
 
 	h->has_lens = optical != NULL && pico4_lens_parse_optical(optical, h->lens);
+	if (!h->has_lens && config != NULL && pico4_lens_parse_sdk(config, h->lens)) {
+		/*
+		 * Factory files exist that name the lens centre offsets but no polynomial: the
+		 * first headset outside the project's own (August 2022) carries none, and PICO OS
+		 * runs the stock lens table's generic profile for it. The factory's own offsets
+		 * still apply; only the polynomial comes from the stock table.
+		 */
+		h->has_lens = true;
+		if (optical != NULL) {
+			(void)pico4_lens_parse_centers(optical, h->lens);
+		}
+		P4_INFO(h, "No distortion_parameter in the factory file: the stock lens table's generic profile");
+	}
 	h->ca = (struct pico4_lens_ca){{0}};
 	if (!h->has_lens) {
 		P4_ERROR(h, "No lens data in %s: no distortion correction, provisional 104 degree field of view", dir);

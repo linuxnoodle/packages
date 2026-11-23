@@ -41,7 +41,6 @@ pico4_lens_parse_optical(const char *json_text, struct pico4_lens out_lenses[2])
 	static const char *eyes[2] = {"left", "right"};
 	cJSON *root = cJSON_Parse(json_text);
 	const cJSON *params = cJSON_GetObjectItemCaseSensitive(root, "distortion_parameter");
-	const cJSON *center = cJSON_GetObjectItemCaseSensitive(root, "lens_center_gos");
 	bool ok = params != NULL;
 
 	for (int e = 0; ok && e < 2; e++) {
@@ -53,21 +52,85 @@ pico4_lens_parse_optical(const char *json_text, struct pico4_lens out_lenses[2])
 			snprintf(name, sizeof(name), "A%d", i);
 			ok = get_number(p, name, &l.k[i]);
 		}
-		/*
-		 * Optional: the lens centre's offset in mm. The stock compositor's distortion mesh
-		 * (libpxrcompositor.so) moves the lens centre to the wearer's left as centerx grows and
-		 * up as centery grows, in both eyes, by 1 mm per mm. In compute_distortion's panel
-		 * coordinates (x right, y down) that is cx = -centerx, cy = -centery. The offset moves
-		 * only the lens model, as in stock: the field of view stays symmetric (pico4_lens_fov).
-		 */
+		out_lenses[e] = l;
+	}
+	cJSON_Delete(root);
+	if (ok) {
+		(void)pico4_lens_parse_centers(json_text, out_lenses);
+	}
+	return ok;
+}
+
+bool
+pico4_lens_parse_centers(const char *json_text, struct pico4_lens in_out_lenses[2])
+{
+	static const char *eyes[2] = {"left", "right"};
+	cJSON *root = cJSON_Parse(json_text);
+	const cJSON *center = cJSON_GetObjectItemCaseSensitive(root, "lens_center_gos");
+	bool ok = center != NULL;
+
+	/*
+	 * The stock compositor's distortion mesh (libpxrcompositor.so) moves the lens centre
+	 * to the wearer's left as centerx grows and up as centery grows, in both eyes, by
+	 * 1 mm per mm. In compute_distortion's panel coordinates (x right, y down) that is
+	 * cx = -centerx, cy = -centery. The offset moves only the lens model, as in stock:
+	 * the field of view stays symmetric (pico4_lens_fov).
+	 */
+	for (int e = 0; ok && e < 2; e++) {
 		double mm;
 		if (get_number(cJSON_GetObjectItemCaseSensitive(center, "centerx"), eyes[e], &mm)) {
-			l.cx = -mm * 0.001;
+			in_out_lenses[e].cx = -mm * 0.001;
 		}
 		if (get_number(cJSON_GetObjectItemCaseSensitive(center, "centery"), eyes[e], &mm)) {
-			l.cy = -mm * 0.001;
+			in_out_lenses[e].cy = -mm * 0.001;
 		}
-		out_lenses[e] = l;
+	}
+	cJSON_Delete(root);
+	return ok;
+}
+
+bool
+pico4_lens_parse_sdk(const char *json_text, struct pico4_lens in_out_lenses[2])
+{
+	/*
+	 * The stock lens table carries one generic profile, without per-eye numbers. Its
+	 * eleven distortion coefficients are the same power series in r² as the factory
+	 * file's A0..A10 in equation type 2, the only one any PICO 4 build ships; another
+	 * type's coefficients are refused rather than read as what they are not.
+	 */
+	cJSON *root = cJSON_Parse(json_text);
+	const cJSON *entries = cJSON_GetObjectItemCaseSensitive(root, "configData");
+	struct pico4_lens lens = {0};
+	double f = 0, eqn = 0;
+	unsigned found = 0;
+	const cJSON *entry;
+	cJSON_ArrayForEach (entry, entries)
+	{
+		const cJSON *key = cJSON_GetObjectItemCaseSensitive(entry, "keyName");
+		int index;
+		char tail;
+		double value;
+		if (!cJSON_IsString(key) || !get_number(entry, "keyValue", &value)) {
+			continue;
+		}
+		if (strcmp(key->valuestring, "sdk_lens_metersPerTanAngleAtCenter") == 0) {
+			f = value;
+		} else if (strcmp(key->valuestring, "sdk_lens_distortionEqnType") == 0) {
+			eqn = value;
+		} else if (sscanf(key->valuestring, "sdk_lens_distortionCoefficients%d%c", &index, &tail) == 1 &&
+		           index >= 0 && index < PICO4_LENS_COEFFS) {
+			lens.k[index] = value;
+			found |= 1u << index;
+		}
+	}
+	bool ok = f > 0 && eqn == 2 && found == (1u << PICO4_LENS_COEFFS) - 1;
+	if (ok) {
+		for (int e = 0; e < 2; e++) {
+			in_out_lenses[e].f = f;
+			for (int i = 0; i < PICO4_LENS_COEFFS; i++) {
+				in_out_lenses[e].k[i] = lens.k[i];
+			}
+		}
 	}
 	cJSON_Delete(root);
 	return ok;

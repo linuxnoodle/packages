@@ -46,6 +46,25 @@ struct pico4_lens_ca
 bool
 pico4_lens_parse_optical(const char *json_text, struct pico4_lens out_lenses[2]);
 
+/*!
+ * Parse only the lens centre offsets (lens_center_gos, mm) of OpticalCalibrationData.json
+ * text into the lenses, the same optional fields pico4_lens_parse_optical applies; the
+ * polynomial is left as it is. False when the file names no offsets at all.
+ */
+bool
+pico4_lens_parse_centers(const char *json_text, struct pico4_lens in_out_lenses[2]);
+
+/*!
+ * Parse the stock lens table (SDK_Lens_ConfigFile.txt, JSON text) into both eyes: one
+ * generic profile, which PICO OS runs when the factory file names no polynomial. Its
+ * metres per tan-angle at the centre is the profile's F and its distortion coefficients
+ * the same power series in r² as the factory file's A0..A10, in the equation type every
+ * PICO 4 build ships; another equation type is refused rather than misread. The lens
+ * centres stay as they are: the factory file's own offsets come from pico4_lens_parse_centers.
+ */
+bool
+pico4_lens_parse_sdk(const char *json_text, struct pico4_lens in_out_lenses[2]);
+
 //! Parse the six chromatic aberration terms from the stock lens configuration (JSON text).
 bool
 pico4_lens_parse_ca(const char *json_text, struct pico4_lens_ca *out_ca);
