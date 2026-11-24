@@ -14,7 +14,9 @@
 # (pico4-openxr-display) through the OpenXR loader; pico4-cam checks the
 # tracking cameras on their own; pico4-ctrack-replay runs the controller LED
 # tracker over pico4-cam's recordings; pico4-roomview hands the forward cameras to
-# SteamVR's room view; overpressure-settings and pico4-onboarding are SteamVR
+# SteamVR's room view, which the wearer's double tap on the headset switches as on PICO OS
+# (pico4_tap.h; pico4-tap-replay runs its detector over pico4-imu's recordings);
+# overpressure-settings and pico4-onboarding are SteamVR
 # overlays (Overpressure Settings' dashboard tab, the first-run setup).
 pkgname=pico4-monado
 pkgver=25.1.0
@@ -71,7 +73,7 @@ sha256sums=(SKIP
             '079215437455bb24dabf36ca8598a43e69b25b7fbb20caebf8850fd7d137dc4e'
             '4ea7235b043e92d3ccb9a21277868a7afb2d8963a03d93a1623de8681a136ac6'
             'e712b477138e19966b8a4ba62758c096be2979664c7d97f40c1a1c91feeb5b8b'
-            '7b45549338fbf50e7db10762b105108382c1aa6644cf27b0a763a0db79b935a3'
+            '815604cadccf9cd158195ceac1a8898d78bf6eca38aa124ccc3216b1e70d544a'
             '44160658b28ea1bb24c6c2fc9f378fba14ffe6b1ae4ae2e8b9cbbb44c5ce96ac'
             '5a5317c24d19d91ac502707d6fa8e391d4ba7e1c93875bc8b4f77f14bb84a712'
             '3d3a356292827bde4644810731386f366e4f2afa029ee36fec9ecc1db4692363'
@@ -90,10 +92,10 @@ sha256sums=(SKIP
             '19e0abfd6f872341138b0ea0e7f38ad816dd4d6ed74abca810eab491380c93d8'
             '0078b9cae84a06c1609f719da83bc1333b550447bdd9208de0f83ff00b375cea'
             '670b43baf52b88ecd0963f7927f4b1d4500e1e8cc74cebedb7a76553d26f18b7'
-            'c9aed4ebbe10c87232c89dbd3299072bf311e50ebdc33d0c474ae302106e1900'
-            'ae0e6142841aba8f4bdccc40347f2669b06a10dabe7c4119ea074335b179ad11'
-            '54aa815f0d7e4a1370b94cf1e51c3ce84c38d6bdad66d7e2a41e56ed598efbd8'
-            'e160944ec154fa5caf43d2177396656c8561d1739df07510ce75c3b8ddafa3b3'
+            '99593ceb02caecf33e39a8bdab496f7d07843ccb20f5399abb1676dcc986c71f'
+            'd024b26d7642fda15c096e4462c99a6b2ba5c3e9cc5eadc62496a0ea26a22fb3'
+            'ab42609f2a11a3b071d71d12675aa3eaee7c005b0ec4b6363f021cfea8e5c589'
+            'a6c3a9ac0474ecd33ddc6661b0fbd3c87528b14ef819a9abbf01ae29af3232f5'
             '175f5769b65092ccd746309d6dcf9637b430960cc895b15ff103f8455b117bed'
             '22304e9a08ef83f9165f329ee704e342971a5d781add852af782474d320caed9'
             'ef439cd62f980ac666d74b0eca4b83ea8355bc89d9f702507a097e1d53ee1393'
@@ -119,7 +121,7 @@ sha256sums=(SKIP
             'a52d561a66f774bfab2183f626d1eca003e69e40d5b1ef98a5e8fc2b1e4c4377'
             '3b5723d2dfee9343828f49228ccaaf490205e2588bb02b39d5171b5d7299b619'
             '85c59e96fa7aff425f05c3129679c707a324de9ff7870d11b977e2439c2c6463'
-            '7e332686ec26c09e0a0162047f3ec99e09cfa8bd1428f7acc8699b5646c46b67'
+            '2e67b6ed317d26b1817691c3a713312128174bb4ebcc6d7a70e96e0785801573'
             '4d65eeb635e98fb994fecf8cd5448e754c97c598eacea86852fb8930eaaadd08'
             '6f9e6b63f008118305f60253257bcbf28354594e84b7bd8fa3b5ca33dcd11872'
             '6168eaa35df0d363fbd7b5b86fca92b2aa63c2c06979932cf03a9531279773cc'
