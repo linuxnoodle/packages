@@ -87,7 +87,7 @@ pico4_lens_parse_serial(const char *json_text, int eye, char out_serial[PICO4_LE
 
 /*!
  * PICO OS's pick for a lens serial number in the table of lens batches
- * (pxrconfig/rule/SDK_Lens_Distortion_MatchConfigFile.txt, JSON text), into *out_lens: F and
+ * (pxrconfig/SDK_Lens_Distortion_MatchConfigFile.txt, JSON text), into *out_lens: F and
  * A0..A10 of the picked entry's profile, the lens centre as it is. Of the entries whose serial
  * number contains the lens's mould and cavity ("<model>_h<hole>") and the table's "default"
  * entry, the one that sorts last at or below the lens's serial number, by plain string order:
@@ -118,7 +118,7 @@ struct pico4_lens_loaded
 
 /*!
  * Both eyes' lens models into *out_lenses from the factory file (OpticalCalibrationData.json
- * text), the table of lens batches (pxrconfig/rule/SDK_Lens_Distortion_MatchConfigFile.txt text)
+ * text), the table of lens batches (pxrconfig/SDK_Lens_Distortion_MatchConfigFile.txt text)
  * and the stock lens configuration (SDK_Lens_ConfigFile.txt text), any of which may be NULL.
  * Per eye, as PICO OS picks it: F and A0..A10 of the factory file's polynomial; else of the
  * lens's batch, which the factory file names by its serial number; else of the stock lens

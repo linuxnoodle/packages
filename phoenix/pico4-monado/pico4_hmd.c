@@ -1265,7 +1265,7 @@ load_lens(struct pico4_hmd *h)
 {
 	const char *dir = debug_get_option_pico4_calibration();
 	char *optical = read_text(dir, "pvr/OpticalCalibrationData.json");
-	char *table = read_text(dir, "pxrconfig/rule/SDK_Lens_Distortion_MatchConfigFile.txt");
+	char *table = read_text(dir, "pxrconfig/SDK_Lens_Distortion_MatchConfigFile.txt");
 	char *config = read_text(dir, "pxrconfig/SDK_Lens_ConfigFile.txt");
 
 	// Each eye's profile as PICO OS picks it (pico4_lens_load).
