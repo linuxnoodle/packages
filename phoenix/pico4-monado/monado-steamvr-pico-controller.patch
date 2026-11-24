@@ -1,6 +1,6 @@
 --- a/src/xrt/state_trackers/steamvr_drv/ovrd_driver.cpp
 +++ b/src/xrt/state_trackers/steamvr_drv/ovrd_driver.cpp
-@@ -740,6 +740,40 @@
+@@ -740,6 +740,42 @@
  		}
  	}
  
@@ -33,6 +33,8 @@
 +		AddControl("/input/a/touch", XRT_INPUT_PICO4_A_TOUCH, NULL);
 +		AddControl("/input/b/click", XRT_INPUT_PICO4_B_CLICK, NULL);
 +		AddControl("/input/b/touch", XRT_INPUT_PICO4_B_TOUCH, NULL);
++		AddControl("/input/menu/click", XRT_INPUT_PICO4_MENU_CLICK, NULL);
++		AddControl("/input/pico/click", XRT_INPUT_PICO4_SYSTEM_CLICK, NULL);
 +		AddControl("/input/system/click",
 +		           m_hand == XRT_HAND_LEFT ? XRT_INPUT_PICO4_MENU_CLICK : XRT_INPUT_PICO4_SYSTEM_CLICK, NULL);
 +		AddOutputControl(XRT_OUTPUT_NAME_PICO4_HAPTIC, "/output/haptic");
@@ -41,7 +43,7 @@
  	void
  	AddMonadoControls()
  	{
-@@ -837,6 +871,12 @@
+@@ -837,6 +873,12 @@
  
  			m_input_profile = std::string("{monado}/input/") + std::string(p->steamvr_input_profile_path);
  			m_controller_type = p->steamvr_controller_type;
@@ -54,7 +56,7 @@
  		}
  
  		ovrd_log("Using input profile %s\n", m_input_profile.c_str());
-@@ -850,6 +890,8 @@
+@@ -850,6 +892,8 @@
  		m_input_controls.clear();
  		if (m_emulate_index_controller) {
  			AddEmulatedIndexControls();
